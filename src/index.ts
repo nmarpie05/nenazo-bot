@@ -3,6 +3,7 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { startCronJob } from './cron.js';
 
 // Cargamos las variables de entorno desde el archivo .env
 dotenv.config();
@@ -43,6 +44,9 @@ const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('
 // Evento: Cuando el bot se conecta exitosamente al Gateway
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`🤖 ¡Bot conectado exitosamente como ${readyClient.user.tag}!`);
+
+  // Arrancamos el cron job de ingesta de noticias
+  startCronJob();
 });
 
 // Evento: Cuando un usuario ejecuta un slash command
