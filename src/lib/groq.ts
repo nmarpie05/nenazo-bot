@@ -7,6 +7,39 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 const GROQ_MODEL = 'openai/gpt-oss-20b';
 const DISCORD_LIMIT = 1800;
 
+export async function generateBullets(
+  teamName: string,
+  headlines: string[]
+): Promise<string | null> {
+  if (headlines.length === 0) return null;
+
+  const prompt = `Sos un editor de noticias. Resumí las siguientes noticias de ${teamName} en exactamente 5 bullet points.
+Cada bullet debe ser una oración corta con UN hecho concreto.
+Usá lenguaje neutro y objetivo — sin opiniones ni adornos.
+Solo devolvé los bullets, uno por línea, empezando con "•".
+
+Titulares:
+${headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}`;
+
+  if (process.env.GROQ_API_KEY) {
+    try {
+      const completion = await groq.chat.completions.create({
+        model: GROQ_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 300,
+        temperature: 0.3, // Temperatura baja para que sea muy objetivo y fáctico
+      });
+      return completion.choices[0]?.message?.content ?? null;
+    } catch (error) {
+      console.warn('[Groq] Error generando bullets, cayendo a Gemini:', error);
+    }
+  }
+  
+  // Fallback a Gemini si Groq falla
+  console.log('[LLM] Generando bullets con Gemini (fallback)...');
+  return require('./gemini.js').generateBullets(teamName, headlines);
+}
+
 /**
  * Genera un resumen estilizado aplicando el tono del servidor.
  * Usa Groq como primario (ultra-rápido) y cae a Gemini si Groq falla.

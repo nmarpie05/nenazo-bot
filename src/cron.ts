@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { supabase } from './lib/supabase.js';
 import { fetchNewsFromSource } from './lib/adapters/index.js';
 import { Source, Team, NormalizedNews } from './lib/types.js';
-import { generateBullets } from './lib/gemini.js';
+import { generateBullets } from './lib/groq.js';
 import { getHeadlinesForTeam, saveTeamSummary } from './lib/queries.js';
 
 
