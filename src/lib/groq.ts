@@ -4,7 +4,7 @@ import { generateNewsSummary } from './gemini.js';
 // Cliente Groq — ultra-rápido gracias al hardware especializado (LPU)
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_MODEL = 'llama3-70b-8192';
 const DISCORD_LIMIT = 1800;
 
 /**
