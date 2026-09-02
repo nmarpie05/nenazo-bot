@@ -1,36 +1,35 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
-import { findTeamByName, getHeadlinesForTeam, getGuildTone } from '../lib/queries.js';
-import { generateNewsSummary } from '../lib/gemini.js';
+import { findTeamByName, getGuildTone, getTeamSummary } from '../lib/queries.js';
+import { generateStyledSummary } from '../lib/groq.js';
 
 export const data = new SlashCommandBuilder()
   .setName('racing')
   .setDescription('Resumen de las últimas noticias de Racing Club generado por IA 🏆');
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  // Defer reply: Le dice a Discord "estoy procesando, dame unos segundos"
-  // Es OBLIGATORIO si la respuesta tarda más de 3 segundos (Gemini puede tardar un poco)
   await interaction.deferReply();
 
   try {
-    // 1. Buscamos Racing en la base de datos
     const team = await findTeamByName('racing');
     if (!team) {
       await interaction.editReply('No encontré a Racing Club en la base de datos. 🤔');
       return;
     }
 
-    // 2. Traemos los titulares de las últimas 24hs
-    const headlines = await getHeadlinesForTeam(team.id);
-
-    // 3. Obtenemos el tono configurado para este servidor
+    // Traemos el resumen pre-generado del cron (bullets sin tono)
+    const summaryData = await getTeamSummary(team.id);
     const tone = await getGuildTone(interaction.guildId!);
 
-    // 4. Le pedimos a Gemini que genere el resumen
-    const summary = await generateNewsSummary(team.name, headlines, tone);
+    // Groq aplica el tono a los bullets — ultra-rápido (~0.5s)
+    const response = await generateStyledSummary(team.name, summaryData?.bullets ?? null, tone);
 
-    // 5. Respondemos en Discord con el resumen
+    // Si hay datos, mostramos cuándo fue el último update
+    const timestamp = summaryData
+      ? `\n\n*⏱️ Actualizado: ${new Date(summaryData.generated_at).toLocaleTimeString('es-AR')}*`
+      : '';
+
     await interaction.editReply({
-      content: `## 🏎️ Noticias de Racing Club\n\n${summary}`,
+      content: `## 🏎️ Noticias de Racing Club\n\n${response}${timestamp}`,
     });
 
   } catch (error) {
@@ -38,3 +37,4 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     await interaction.editReply('Hubo un error inesperado. Intentá de nuevo en un momento.');
   }
 }
+

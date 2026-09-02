@@ -2,6 +2,9 @@ import cron from 'node-cron';
 import { supabase } from './lib/supabase.js';
 import { fetchNewsFromSource } from './lib/adapters/index.js';
 import { Source, Team, NormalizedNews } from './lib/types.js';
+import { generateBullets } from './lib/gemini.js';
+import { getHeadlinesForTeam, saveTeamSummary } from './lib/queries.js';
+
 
 // --- Funciones auxiliares ---
 
@@ -130,7 +133,32 @@ export async function runIngestion(): Promise<void> {
   }
 
   console.log('[Cron] ✅ Ciclo de ingesta finalizado.');
+
+  // 5. Generamos bullets en background para los equipos que tuvieron noticias nuevas
+  // Hacemos esto en background (sin await) para no bloquear la ingesta
+  generateBulletsForActiveTeams(teams).catch(err =>
+    console.error('[Cron] Error generando bullets:', err)
+  );
 }
+
+/**
+ * Genera y guarda los bullet points (hechos clave sin tono) para cada equipo
+ * que tiene noticias en las últimas 24hs. Estos bullets se usan luego en los
+ * slash commands junto con el tono del servidor para armar la respuesta final.
+ */
+async function generateBulletsForActiveTeams(teams: Team[]): Promise<void> {
+  for (const team of teams) {
+    const headlines = await getHeadlinesForTeam(team.id, 10);
+    if (headlines.length === 0) continue; // Sin noticias, no generamos
+
+    const bullets = await generateBullets(team.name, headlines);
+    if (bullets) {
+      await saveTeamSummary(team.id, bullets);
+      console.log(`[Cron] 📝 Bullets generados para ${team.name}.`);
+    }
+  }
+}
+
 
 /**
  * Registra el cron job para que corra automáticamente cada 15 minutos.

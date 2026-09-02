@@ -1,41 +1,71 @@
 import { GoogleGenAI } from '@google/genai';
 
-// Inicializamos el cliente de Gemini con la API key del .env
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-
-// El modelo que vamos a usar. gemini-3.6-flash es la versión vigente, rápida y económica.
 const MODEL = 'gemini-3.6-flash';
 
 /**
- * Genera un resumen de las noticias del día para un equipo dado,
- * usando el tono configurado por el servidor de Discord.
+ * Genera 5-6 bullet points con los hechos clave de las noticias.
+ * SIN tono — son datos puros para guardar en caché.
+ * Esta función corre en el cron job (background), no on-demand.
+ */
+export async function generateBullets(
+  teamName: string,
+  headlines: string[]
+): Promise<string | null> {
+  if (headlines.length === 0) return null;
+
+  const prompt = `
+Sos un editor de noticias. Resumí las siguientes noticias de ${teamName} en exactamente 5 bullet points.
+Cada bullet debe ser una oración corta con UN hecho concreto.
+Usá lenguaje neutro y objetivo — sin opiniones ni adornos.
+Solo devolvé los bullets, uno por línea, empezando con "•".
+
+Titulares:
+${headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}
+  `.trim();
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL,
+      contents: prompt,
+      config: { maxOutputTokens: 300 },
+    });
+    return response.text ?? null;
+  } catch (error) {
+    console.error('[Gemini] Error generando bullets:', error);
+    return null;
+  }
+}
+
+/**
+ * Aplica un tono a los bullets pre-generados.
+ * Fallback usado si Groq no está disponible.
  *
- * @param teamName   - Nombre del equipo (ej: "Racing Club")
- * @param headlines  - Lista de títulos de noticias (NUNCA texto copiado del artículo)
- * @param tone       - El system prompt con el "personaje" del bot para este servidor
- * @returns          - El resumen generado por Gemini
+ * @param teamName  - Nombre del equipo
+ * @param bullets   - Los bullet points pre-generados (hechos sin tono)
+ * @param tone      - El system prompt con el personaje del bot
  */
 export async function generateNewsSummary(
   teamName: string,
-  headlines: string[],
+  bullets: string | null, // Los bullet points pre-generados por el cron
   tone: string
 ): Promise<string> {
 
-  // Armamos el prompt. Si no hay titulares, le decimos a Gemini que lo comunique en su tono.
-  const newsContext = headlines.length > 0
-    ? `Titulares disponibles:\n${headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}`
-    : `No hay titulares disponibles sobre ${teamName} en las últimas horas.`;
+  // Armamos el prompt con los bullets pre-generados
+  const newsContext = bullets
+    ? `Hechos clave:\n${bullets}`
+    : `No hay noticias disponibles sobre ${teamName} en las últimas horas.`;
 
   const userPrompt = `
 Tenés que informar sobre las últimas noticias de ${teamName}.
 
 ${newsContext}
 
-${headlines.length > 0
-    ? 'Escribí un resumen cohesivo de no más de 3 párrafos cortos. No copies los titulares literalmente, sintetizalos con tus propias palabras.'
+${bullets
+    ? 'Reescribí estos hechos como un resumen cohesivo de 2-3 párrafos cortos. No copies los bullets literalmente.'
     : 'Comunicá de forma creativa que no hay noticias disponibles en este momento.'
   }
-Respondé directamente, sin frases introductorias como "Aquí te presento...".
+Respondé directamente, sin frases introductorias.
   `.trim();
 
   // Reintento automático en caso de error 503 (sobrecarga temporal de la API)

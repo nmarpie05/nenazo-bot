@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js';
 import { Team } from './types.js';
 
+
 const DEFAULT_TONE = 'Sos un periodista deportivo argentino, conciso y objetivo. Resumí las noticias del día sin copiar texto literal de los artículos.';
 
 /**
@@ -83,5 +84,33 @@ export async function setGuildTone(guildId: string, tone: string): Promise<void>
   if (error) {
     console.error('[queries] Error guardando tono:', error.message);
     throw error;
+  }
+}
+
+/**
+ * Trae el resumen (bullets) pre-generado del equipo, si existe.
+ * Retorna null si no hay ninguno todavía.
+ */
+export async function getTeamSummary(teamId: string): Promise<{ bullets: string; generated_at: string } | null> {
+  const { data } = await supabase
+    .from('team_summaries')
+    .select('bullets, generated_at')
+    .eq('team_id', teamId)
+    .single();
+
+  return data ?? null;
+}
+
+/**
+ * Guarda o actualiza los bullets pre-generados para un equipo.
+ * Usa UPSERT porque solo guardamos UN resumen por equipo (el más reciente).
+ */
+export async function saveTeamSummary(teamId: string, bullets: string): Promise<void> {
+  const { error } = await supabase
+    .from('team_summaries')
+    .upsert({ team_id: teamId, bullets, generated_at: new Date().toISOString() });
+
+  if (error) {
+    console.error('[queries] Error guardando team summary:', error.message);
   }
 }

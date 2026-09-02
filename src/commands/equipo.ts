@@ -1,47 +1,41 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
-import { findTeamByName, getHeadlinesForTeam, getGuildTone } from '../lib/queries.js';
-import { generateNewsSummary } from '../lib/gemini.js';
+import { findTeamByName, getGuildTone, getTeamSummary } from '../lib/queries.js';
+import { generateStyledSummary } from '../lib/groq.js';
 
 export const data = new SlashCommandBuilder()
   .setName('equipo')
-  .setDescription('Resumen de noticias de cualquier equipo de la Primera División Argentina 🇦🇷')
+  .setDescription('Resumen de las últimas noticias del equipo que elijas ⚽')
   .addStringOption(option =>
-    option
-      .setName('nombre')
-      .setDescription('Nombre del equipo (ej: Boca, River, San Lorenzo...)')
+    option.setName('nombre')
+      .setDescription('Nombre del equipo (ej: Boca, River, Independiente)')
       .setRequired(true)
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  // Tomamos el valor del parámetro que escribió el usuario
-  const nombreInput = interaction.options.getString('nombre', true);
-
+  const query = interaction.options.getString('nombre', true);
   await interaction.deferReply();
 
   try {
-    // 1. Buscamos el equipo por nombre o alias
-    const team = await findTeamByName(nombreInput);
-
+    const team = await findTeamByName(query);
     if (!team) {
-      await interaction.editReply(
-        `No encontré ningún equipo con el nombre **"${nombreInput}"**.\n` +
-        `Probá con el nombre completo o un alias conocido (ej: "Boca", "Xeneize", "River", "Millonario").`
-      );
+      await interaction.editReply(`No encontré al equipo "${query}" en la base de datos. 🤔`);
       return;
     }
 
-    // 2. Traemos los titulares de las últimas 24hs
-    const headlines = await getHeadlinesForTeam(team.id);
-
-    // 3. Tono del servidor
+    // Traemos el resumen pre-generado del cron (bullets sin tono)
+    const summaryData = await getTeamSummary(team.id);
     const tone = await getGuildTone(interaction.guildId!);
 
-    // 4. Resumen con Gemini
-    const summary = await generateNewsSummary(team.name, headlines, tone);
+    // Groq aplica el tono a los bullets — ultra-rápido (~0.5s)
+    const response = await generateStyledSummary(team.name, summaryData?.bullets ?? null, tone);
 
-    // 5. Respondemos
+    // Si hay datos, mostramos cuándo fue el último update
+    const timestamp = summaryData
+      ? `\n\n*⏱️ Actualizado: ${new Date(summaryData.generated_at).toLocaleTimeString('es-AR')}*`
+      : '';
+
     await interaction.editReply({
-      content: `## ⚽ Noticias de ${team.name}\n\n${summary}`,
+      content: `## 📰 Noticias de ${team.name}\n\n${response}${timestamp}`,
     });
 
   } catch (error) {
