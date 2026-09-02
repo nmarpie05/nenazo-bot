@@ -31,7 +31,8 @@ async function deploy() {
   }
 
   // Preparamos el cliente REST
-  const rest = new REST().setToken(token);
+  // Usamos ! porque ya validamos arriba que no son undefined
+  const rest = new REST().setToken(token!);
 
   try {
     console.log(`Enviando ${commands.length} comandos a la API de Discord...`);
@@ -40,7 +41,7 @@ async function deploy() {
     // Los comandos globales tardan mucho en actualizarse en la app de Discord (caché).
     // Los comandos de servidor se actualizan instantáneamente, ideal para desarrollo.
     const data = await rest.put(
-      Routes.applicationGuildCommands(clientId, guildId),
+      Routes.applicationGuildCommands(clientId!, guildId!),
       { body: commands },
     ) as any[];
 
