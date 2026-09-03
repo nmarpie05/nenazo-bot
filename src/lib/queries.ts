@@ -33,6 +33,16 @@ export async function findTeamByName(query: string): Promise<Team | null> {
 }
 
 /**
+ * Obtiene la lista completa de equipos registrados en la base de datos, ordenados alfabéticamente.
+ */
+export async function getAllTeams(): Promise<Team[]> {
+  const { data, error } = await supabase.from('teams').select('*').order('name', { ascending: true });
+  if (error || !data) return [];
+  return data as Team[];
+}
+
+
+/**
  * Trae los últimos N títulos de noticias de un equipo (para el día de hoy).
  * Busca en las últimas 24 horas, ordenado por fecha descendente.
  */

@@ -37,15 +37,13 @@ async function deploy() {
   try {
     console.log(`Enviando ${commands.length} comandos a la API de Discord...`);
 
-    // Usamos applicationGuildCommands (comandos de servidor) en vez de comandos globales.
-    // Los comandos globales tardan mucho en actualizarse en la app de Discord (caché).
-    // Los comandos de servidor se actualizan instantáneamente, ideal para desarrollo.
+    // Registramos los comandos de forma GLOBAL para que estén disponibles en cualquier servidor al que entre el bot
     const data = await rest.put(
-      Routes.applicationGuildCommands(clientId!, guildId!),
+      Routes.applicationCommands(clientId!),
       { body: commands },
     ) as any[];
 
-    console.log(`¡Éxito! Se actualizaron ${data.length} comandos en el servidor.`);
+    console.log(`¡Éxito! Se actualizaron ${data.length} comandos globales en Discord.`);
   } catch (error) {
     console.error("Error al registrar los comandos:", error);
   }
