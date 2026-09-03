@@ -1,6 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
-import { findTeamByName, getGuildTone, getTeamSummary } from '../lib/queries.js';
-import { generateStyledSummary } from '../lib/groq.js';
+import { findTeamByName, getGuildTone, getTeamSummary, getHeadlinesForTeam } from '../lib/queries.js';
+import { generateStyledSummary, generateBullets } from '../lib/groq.js';
 
 export const data = new SlashCommandBuilder()
   .setName('equipo')
@@ -22,14 +22,24 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       return;
     }
 
-    // Traemos el resumen pre-generado del cron (bullets sin tono)
-    const summaryData = await getTeamSummary(team.id);
     const tone = await getGuildTone(interaction.guildId!);
 
-    // Groq aplica el tono a los bullets — ultra-rápido (~0.5s)
-    const response = await generateStyledSummary(team.name, summaryData?.bullets ?? null, tone);
+    // 1. Intentamos usar bullets cacheados (camino rápido)
+    let summaryData = await getTeamSummary(team.id);
+    let bullets = summaryData?.bullets ?? null;
 
-    // Si hay datos, mostramos cuándo fue el último update
+    // 2. Si no hay cache, generamos bullets al vuelo desde los headlines
+    if (!bullets) {
+      console.log(`[/equipo] No hay bullets cacheados para ${team.name}, generando al vuelo...`);
+      const headlines = await getHeadlinesForTeam(team.id, 10);
+      if (headlines.length > 0) {
+        bullets = await generateBullets(team.name, headlines);
+      }
+    }
+
+    // 3. Groq aplica el tono a los bullets
+    const response = await generateStyledSummary(team.name, bullets, tone);
+
     const timestamp = summaryData
       ? `\n\n*⏱️ Actualizado: ${new Date(summaryData.generated_at).toLocaleTimeString('es-AR')}*`
       : '';

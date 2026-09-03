@@ -1,5 +1,5 @@
 import Groq from 'groq-sdk';
-import { generateNewsSummary } from './gemini.js';
+import { generateNewsSummary, generateBullets as geminiBullets } from './gemini.js';
 
 // Cliente Groq — ultra-rápido gracias al hardware especializado (LPU)
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
@@ -7,6 +7,10 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 const GROQ_MODEL = 'openai/gpt-oss-20b';
 const DISCORD_LIMIT = 1800;
 
+/**
+ * Genera bullets (hechos clave sin tono) a partir de titulares.
+ * Usa Groq como primario, Gemini como fallback.
+ */
 export async function generateBullets(
   teamName: string,
   headlines: string[]
@@ -27,7 +31,7 @@ ${headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}`;
         model: GROQ_MODEL,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 300,
-        temperature: 0.3, // Temperatura baja para que sea muy objetivo y fáctico
+        temperature: 0.3,
       });
       return completion.choices[0]?.message?.content ?? null;
     } catch (error) {
@@ -35,18 +39,15 @@ ${headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}`;
     }
   }
   
-  // Fallback a Gemini si Groq falla
+  // Fallback a Gemini
   console.log('[LLM] Generando bullets con Gemini (fallback)...');
-  return require('./gemini.js').generateBullets(teamName, headlines);
+  return geminiBullets(teamName, headlines);
 }
 
 /**
  * Genera un resumen estilizado aplicando el tono del servidor.
- * Usa Groq como primario (ultra-rápido) y cae a Gemini si Groq falla.
- *
- * @param teamName - Nombre del equipo
- * @param bullets  - Bullet points pre-generados por el cron (hechos sin tono)
- * @param tone     - System prompt con el personaje del servidor
+ * Acepta bullets pre-generados O headlines crudos como fallback.
+ * Usa Groq como primario y cae a Gemini si Groq falla.
  */
 export async function generateStyledSummary(
   teamName: string,
