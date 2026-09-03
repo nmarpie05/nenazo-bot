@@ -134,11 +134,8 @@ export async function runIngestion(): Promise<void> {
 
   console.log('[Cron] ✅ Ciclo de ingesta finalizado.');
 
-  // 5. Generamos bullets en background para los equipos que tuvieron noticias nuevas
-  // Hacemos esto en background (sin await) para no bloquear la ingesta
-  generateBulletsForActiveTeams(teams).catch(err =>
-    console.error('[Cron] Error generando bullets:', err)
-  );
+  // 5. Generamos bullets para los equipos que tienen noticias recientes
+  await generateBulletsForActiveTeams(teams);
 }
 
 /**

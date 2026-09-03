@@ -40,23 +40,39 @@ export async function getHeadlinesForTeam(
   teamId: string,
   limit = 10
 ): Promise<string[]> {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(); // últimas 24hs
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const { data, error } = await supabase
+  // Paso 1: Traemos los IDs de noticias vinculadas a este equipo
+  const { data: relations, error: relError } = await supabase
     .from('news_teams')
-    .select('news(title, published_at)')
-    .eq('team_id', teamId)
-    .gte('news.published_at', since)
-    .order('news(published_at)', { ascending: false })
+    .select('news_id')
+    .eq('team_id', teamId);
+
+  if (relError || !relations || relations.length === 0) {
+    console.log(`[queries] No hay relaciones news_teams para team ${teamId}`);
+    return [];
+  }
+
+  const newsIds = relations.map(r => r.news_id);
+
+  // Paso 2: Traemos las noticias recientes (últimas 24hs) de esos IDs
+  const { data: news, error: newsError } = await supabase
+    .from('news')
+    .select('title, published_at')
+    .in('id', newsIds)
+    .gte('published_at', since)
+    .order('published_at', { ascending: false })
     .limit(limit);
 
-  if (error || !data) return [];
+  if (newsError || !news) {
+    console.error('[queries] Error trayendo headlines:', newsError?.message);
+    return [];
+  }
 
-  // Extraemos los títulos del resultado
-  return (data as any[])
-    .map(row => row.news?.title)
-    .filter(Boolean) as string[];
+  console.log(`[queries] Team ${teamId}: ${relations.length} relaciones, ${news.length} noticias en últimas 24h`);
+  return news.map(n => n.title).filter(Boolean);
 }
+
 
 /**
  * Obtiene el tono configurado para un servidor de Discord.
