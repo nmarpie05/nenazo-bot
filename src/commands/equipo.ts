@@ -1,6 +1,6 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
 import { findTeamByName, getGuildTone, getTeamSummary, getHeadlinesForTeam } from '../lib/queries.js';
-import { generateStyledSummary, generateBullets } from '../lib/groq.js';
+import { generateStyledSummary } from '../lib/groq.js';
 
 export const data = new SlashCommandBuilder()
   .setName('equipo')
@@ -28,16 +28,17 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     let summaryData = await getTeamSummary(team.id);
     let bullets = summaryData?.bullets ?? null;
 
-    // 2. Si no hay cache, generamos bullets al vuelo desde los headlines
+    // 2. Si no hay cache, armamos los bullets directo desde los titulares (SIN LLM)
     if (!bullets) {
-      console.log(`[/equipo] No hay bullets cacheados para ${team.name}, generando al vuelo...`);
+      console.log(`[/equipo] No hay bullets cacheados para ${team.name}, usando headlines directo...`);
       const headlines = await getHeadlinesForTeam(team.id, 10);
       if (headlines.length > 0) {
-        bullets = await generateBullets(team.name, headlines);
+        bullets = headlines.map(h => `• ${h}`).join('\n');
+        console.log(`[/equipo] ${headlines.length} headlines formateados como bullets para ${team.name}`);
       }
     }
 
-    // 3. Groq aplica el tono a los bullets
+    // 3. Groq aplica el tono a los bullets (UNA sola llamada LLM)
     const response = await generateStyledSummary(team.name, bullets, tone);
 
     const timestamp = summaryData

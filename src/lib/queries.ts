@@ -42,11 +42,14 @@ export async function getHeadlinesForTeam(
 ): Promise<string[]> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  // Paso 1: Traemos los IDs de noticias vinculadas a este equipo
+  // Paso 1: Traemos los IDs de noticias vinculadas a este equipo (solo los últimos 50
+  // para evitar que la URL de Supabase sea demasiado larga y falle con "fetch failed")
   const { data: relations, error: relError } = await supabase
     .from('news_teams')
     .select('news_id')
-    .eq('team_id', teamId);
+    .eq('team_id', teamId)
+    .order('news_id', { ascending: false })
+    .limit(50);
 
   if (relError || !relations || relations.length === 0) {
     console.log(`[queries] No hay relaciones news_teams para team ${teamId}`);
@@ -72,6 +75,7 @@ export async function getHeadlinesForTeam(
   console.log(`[queries] Team ${teamId}: ${relations.length} relaciones, ${news.length} noticias en últimas 24h`);
   return news.map(n => n.title).filter(Boolean);
 }
+
 
 
 /**
