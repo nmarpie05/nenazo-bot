@@ -37,13 +37,21 @@ async function deploy() {
   try {
     console.log(`Enviando ${commands.length} comandos a la API de Discord...`);
 
-    // Registramos los comandos de forma GLOBAL para que estén disponibles en cualquier servidor al que entre el bot
-    const data = await rest.put(
+    // 1. Registramos de forma GLOBAL (para todos los servidores futuros)
+    const globalData = await rest.put(
       Routes.applicationCommands(clientId!),
       { body: commands },
     ) as any[];
+    console.log(`¡Éxito! Se actualizaron ${globalData.length} comandos globales en Discord.`);
 
-    console.log(`¡Éxito! Se actualizaron ${data.length} comandos globales en Discord.`);
+    // 2. Si hay un GUILD_ID configurado, los registramos también directo a ese servidor (actualización INSTANTÁNEA)
+    if (guildId) {
+      const guildData = await rest.put(
+        Routes.applicationGuildCommands(clientId!, guildId!),
+        { body: commands },
+      ) as any[];
+      console.log(`¡Éxito! Se actualizaron ${guildData.length} comandos de servidor instantáneos (Guild: ${guildId}).`);
+    }
   } catch (error) {
     console.error("Error al registrar los comandos:", error);
   }
