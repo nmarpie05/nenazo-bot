@@ -1,5 +1,5 @@
 import Groq from 'groq-sdk';
-import { generateNewsSummary, generateBullets as geminiBullets } from './gemini.js';
+import { generateNewsSummary, generateBullets as geminiBullets, isQuotaError } from './gemini.js';
 
 // Cliente Groq — ultra-rápido gracias al hardware especializado (LPU)
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
@@ -34,8 +34,12 @@ ${headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}`;
         temperature: 0.3,
       });
       return completion.choices[0]?.message?.content ?? null;
-    } catch (error) {
-      console.warn('[Groq] Error generando bullets, cayendo a Gemini:', error);
+    } catch (error: any) {
+      if (isQuotaError(error)) {
+        console.warn(`[Groq] Límite de cuota alcanzado (429) para ${teamName}, cayendo a Gemini...`);
+      } else {
+        console.warn('[Groq] Error generando bullets, cayendo a Gemini:', error?.message || error);
+      }
     }
   }
   
@@ -79,8 +83,12 @@ export async function generateStyledSummary(
       if (text) {
         return text.length > DISCORD_LIMIT ? text.slice(0, DISCORD_LIMIT) + '...' : text;
       }
-    } catch (error) {
-      console.warn('[Groq] Error, cayendo a Gemini como fallback:', error);
+    } catch (error: any) {
+      if (isQuotaError(error)) {
+        console.warn('[Groq] Límite de cuota alcanzado (429), cayendo a Gemini...');
+      } else {
+        console.warn('[Groq] Error, cayendo a Gemini como fallback:', error?.message || error);
+      }
     }
   }
 

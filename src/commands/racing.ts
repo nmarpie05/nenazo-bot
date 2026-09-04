@@ -1,6 +1,7 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
 import { findTeamByName, getGuildTone, getTeamSummary, getHeadlinesForTeam } from '../lib/queries.js';
 import { generateStyledSummary } from '../lib/groq.js';
+import { QUOTA_EXHAUSTED_MESSAGE } from '../lib/gemini.js';
 
 export const data = new SlashCommandBuilder()
   .setName('racing')
@@ -39,9 +40,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       ? `\n\n*⏱️ Actualizado: ${new Date(summaryData.generated_at).toLocaleTimeString('es-AR')}*`
       : '';
 
-    await interaction.editReply({
-      content: `## 🏎️ Noticias de Racing Club\n\n${response}${timestamp}`,
-    });
+    let content = `## 🏎️ Noticias de Racing Club\n\n${response}${timestamp}`;
+
+    if (response === QUOTA_EXHAUSTED_MESSAGE && bullets) {
+      content = `## 🏎️ Noticias de Racing Club\n\n${response}\n\n**📌 Titulares recientes:**\n${bullets}${timestamp}`;
+    }
+
+    await interaction.editReply({ content });
 
   } catch (error) {
     console.error('[/racing] Error:', error);

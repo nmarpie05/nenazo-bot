@@ -3,6 +3,27 @@ import { GoogleGenAI } from '@google/genai';
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 const MODEL = 'gemini-3.6-flash';
 
+export const QUOTA_EXHAUSTED_MESSAGE =
+  '⚠️ Se acabaron los tokens de la IA por el momento (Límite de cuota alcanzado). Intentá más tarde cuando se renueve el cupo.';
+
+/**
+ * Determina si un error devuelto por la API es por límite de cuota/rate limit (429).
+ */
+export function isQuotaError(error: any): boolean {
+  if (!error) return false;
+  const status = error?.status || error?.error?.code || error?.response?.status;
+  if (status === 429) return true;
+  const str = (error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error))).toLowerCase();
+  return (
+    str.includes('429') ||
+    str.includes('quota') ||
+    str.includes('resource_exhausted') ||
+    str.includes('rate_limit') ||
+    str.includes('rate limit') ||
+    str.includes('tpd')
+  );
+}
+
 /**
  * Genera 5-6 bullet points con los hechos clave de las noticias.
  * SIN tono — son datos puros para guardar en caché.
@@ -31,8 +52,12 @@ ${headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}
       config: { maxOutputTokens: 300 },
     });
     return response.text ?? null;
-  } catch (error) {
-    console.error('[Gemini] Error generando bullets:', error);
+  } catch (error: any) {
+    if (isQuotaError(error)) {
+      console.warn(`[Gemini] Límite de cuota alcanzado (429) al generar bullets para ${teamName}.`);
+    } else {
+      console.error('[Gemini] Error generando bullets:', error);
+    }
     return null;
   }
 }
@@ -92,6 +117,11 @@ Respondé directamente, sin frases introductorias.
         : text;
 
     } catch (error: any) {
+      if (isQuotaError(error)) {
+        console.warn('[Gemini] Límite de cuota alcanzado (429) generando resumen.');
+        return QUOTA_EXHAUSTED_MESSAGE;
+      }
+
       const is503 = error?.status === 503 || error?.message?.includes('503');
 
       if (is503 && attempt < MAX_RETRIES) {
